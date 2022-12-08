@@ -1,6 +1,6 @@
 # nixos-config
 
-## Installer
+## Installation
 
 ### Networking
 
@@ -111,4 +111,82 @@ Generate the initial config:
 
 ```
 # nixos-generate-config --root /mnt
+```
+
+Edit the configuration if desired.
+
+```
+# vi /mnt/etc/nixos/configuration.nix
+```
+
+Users:
+
+```
+users.users.cat = {
+  isNormalUser  = true;
+  home  = "/home/cat";
+  description  = "cat";
+  extraGroups  = [ "wheel" "networkmanager" ];
+  initialHashedPassword = "cuteoverload.com";
+  #openssh.authorizedKeys.keys  = [ "ssh-dss AAAAB3Nza... alice@foobar" ];
+};
+```
+
+Start the install:
+
+```
+# nixos-install
+```
+
+Set the password and reboot
+
+### Other Options
+
+#### Automatic Upgrades
+
+configuration.nix:
+
+```
+system.autoUpgrade.enable = true;
+```
+
+## Common Commands
+
+### Change to configuration.nix
+
+```
+# nixos-rebuild switch
+```
+
+### Upgrade Packages
+
+```
+nixos-rebuild switch --upgrade
+```
+
+### Add Channel
+
+```
+# nix-channel --add https://nixos.org/channels/nixos-unstable nixos
+```
+
+## Build Your Own ISO
+
+```
+$ git clone https://github.com/NixOS/nixpkgs.git
+$ cd nixpkgs/nixos
+$ git switch nixos-unstable
+$ nix-build -A config.system.build.isoImage -I nixos-config=modules/installer/cd-dvd/installation-cd-minimal.nix default.nix
+```
+
+Consider creating your own with a modified kernel:
+
+```
+{ pkgs, ... }:
+
+{
+  imports = [ ./installation-cd-graphical-plasma5.nix ];
+
+  boot.kernelPackages = pkgs.linuxPackages_testing;
+}
 ```
