@@ -45,6 +45,8 @@ DISK_PATH=/dev/nvme0n1
 SWAP_SIZE=80GB
 ```
 
+##### GPT
+
 Create a GPT partition table.
 
 ```
@@ -69,6 +71,22 @@ Finally, the boot partition. NixOS by default uses the ESP (EFI system partition
 # parted $DISK_PATH -- mkpart ESP fat32 1MB 512MB
 # parted $DISK_PATH -- set 3 esp on
 ```
+
+##### MBR
+
+```
+# parted $DISK_PATH -- mklabel msdos
+```
+
+```
+# parted $DISK_PATH -- mkpart primary 1MB 100%
+```
+
+```
+# parted $DISK_PATH -- set 1 boot on
+```
+
+##### Common
 
 Refer to the new disk layout
 
@@ -113,10 +131,21 @@ Generate the initial config:
 # nixos-generate-config --root /mnt
 ```
 
-Edit the configuration if desired.
+Edit the configuration.
 
 ```
 # vi /mnt/etc/nixos/configuration.nix
+```
+
+Boot:
+```
+boot.loader.grub.devce = "/dev/vda"; # or whatever yours is
+```
+
+Network:
+```
+networking.hostName = "nixxy";
+networking.networkmanager.enable = true;
 ```
 
 Users:
@@ -127,7 +156,7 @@ users.users.cat = {
   home  = "/home/cat";
   description  = "cat";
   extraGroups  = [ "wheel" "networkmanager" ];
-  initialHashedPassword = "cuteoverload.com";
+  initialPassword = "cuteoverload.com";
   #openssh.authorizedKeys.keys  = [ "ssh-dss AAAAB3Nza... alice@foobar" ];
 };
 ```
@@ -168,6 +197,7 @@ nixos-rebuild switch --upgrade
 
 ```
 # nix-channel --add https://nixos.org/channels/nixos-unstable nixos
+# nix-channel --update
 ```
 
 ## Build Your Own ISO
@@ -189,4 +219,93 @@ Consider creating your own with a modified kernel:
 
   boot.kernelPackages = pkgs.linuxPackages_testing;
 }
+```
+
+# Home Manager
+
+## Install
+
+Add the channel:
+
+```
+$ sudo nix-channel --add https://github.com/nix-community/home-manager/archive/release-22.11.tar.gz home-manager
+$ sudo nix-channel --update
+```
+
+Add it to your configuration.nix
+
+```
+imports = [
+  	...
+	<home-manager/nixos>
+];
+
+[...]
+
+home-manager.users.cat = { pkgs, ... }: {
+  home.stateVersion = "22.11"; # REQUIRED!
+  home.packages = with pkgs; [
+    git
+    # ...
+  ];
+  programs.bash.enable = true;
+};
+
+home-manager.useUserPackages = true;
+```
+
+Switch to it:
+
+```
+$ sudo nixos-rebuild switch
+```
+
+Check if `home-manager` is in your path.
+* At some point I had to do a `nix-shell '<home-manager>' -A install`...this doesn't exist in the nixos module install instructions. I assume it was user error, but just in case...
+
+Edit `~/.config/nixpkgs/home.nix`
+
+```
+{ config, pkgs, ... }:
+
+{
+  # Home Manager needs a bit of information about you and the
+  # paths it should manage.
+  home.username = "cat";
+  home.homeDirectory = "/home/cat";
+
+  # Packages that should be installed to the user profile.
+  home.packages = [
+    pkgs.htop
+  ];
+
+  # This value determines the Home Manager release that your
+  # configuration is compatible with. This helps avoid breakage
+  # when a new Home Manager release introduces backwards
+  # incompatible changes.
+  #
+  # You can update Home Manager without changing this value. See
+  # the Home Manager release notes for a list of state version
+  # changes in each release.
+  home.stateVersion = "22.11";
+
+  # Let Home Manager install and manage itself.
+  programs.home-manager.enable = true;
+
+  programs.neovim = {
+    enable = true;
+    viAlias = true;
+    vimAlias = true;
+    vimdiffAlias = true;
+    extraConfig = "lua << EOF\n" + builtins.readFile ./init.lua + "\nEOF";
+    plugins = with pkgs.vimPlugins; [
+    ]
+  };
+}
+```
+
+Then run
+
+```
+$ home-manager switch
 ```
