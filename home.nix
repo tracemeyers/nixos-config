@@ -22,11 +22,19 @@
     go
     gopls
     # neovim # uncomment if not using nixos. there's probably a way to do this in nix...but effort :)
+    nodejs-16_x
     nodePackages.bash-language-server
+    nodePackages.eslint
+    nodePackages.prettier
+    nodePackages.typescript
+    nodePackages.typescript-language-server
+    nodePackages.yaml-language-server
     powerline-go
+    python-language-server
     ripgrep
     shellcheck # bash script linter
     shfmt      # bash script formatter
+    terraform-ls
     tree
   ];
 
@@ -70,138 +78,243 @@
 
   programs.neovim = let
 	  initlua = ''
-			vim.api.nvim_command('colorscheme slate')
-			vim.api.nvim_command('set nomousefocus')
-			vim.api.nvim_command('set number')
-			vim.api.nvim_command('set relativenumber')
+            vim.api.nvim_command('colorscheme PaperColor')
+            vim.api.nvim_command('set background=dark')
+            vim.api.nvim_command('set nomousefocus')
+            vim.api.nvim_command('set number')
+            vim.api.nvim_command('set relativenumber')
+            vim.api.nvim_command('set cursorline')
+            vim.api.nvim_command('set laststatus=2')
 
-      -- See all commands: https://github.com/nvim-telescope/telescope.nvim#pickers
-      local telescope = require('telescope.builtin')
-      vim.keymap.set('n', '<leader>ff', telescope.find_files, {})
-      vim.keymap.set('n', '<leader>fg', telescope.grep_string, {})
-      vim.keymap.set('n', '<leader>fG', telescope.live_grep, {})
-      vim.keymap.set('n', '<leader>fj', telescope.jumplist, {})
-      vim.keymap.set('n', '<leader>fb', telescope.buffers, {})
-      vim.keymap.set('n', '<leader>fh', telescope.help_tags, {})
-      vim.keymap.set('n', '<leader>ftree', telescope.treesitter, {})
-
-      vim.api.nvim_create_autocmd('LspAttach', {
-        callback = function(args)
-          local commonOpts = { buffer = args.buf, silent = true }
-
-          -- when the lsp needs to be reinitialized for various reasons
-          vim.keymap.set({'n'},
-                         '<leader>lstop',
-                         function() vim.lsp.stop_client(vim.lsp.get_active_clients()) end,
-                         commonOpts)
-
-          vim.keymap.set({'i'},
-                         '<c-space>',
-                         vim.lsp.buf.completion,
-                         commonOpts)
-
-          vim.keymap.set({'n', 'v'},
-                         '<leader>lca',
-                         vim.lsp.buf.code_action,
-                         commonOpts)
-          vim.keymap.set({'n', 'v'},
-                         '<leader>ldef',
-                         vim.lsp.buf.definition,
-                         commonOpts)
-          vim.keymap.set({'n', 'v'},
-                         '<leader>ldocs',
-                         vim.lsp.buf.document_symbol,
-                         commonOpts)
-          vim.keymap.set({'n', 'v'},
-                         '<leader>lf',
-                         vim.lsp.buf.format,
-                         commonOpts)
-          vim.keymap.set({'n', 'v'},
-                         '<leader>lh',
-                         vim.lsp.buf.hover,
-                         commonOpts)
-          vim.keymap.set({'n', 'v'},
-                         '<leader>li',
-                         vim.lsp.buf.implementation,
-                         commonOpts)
-          vim.keymap.set({'n', 'v'},
-                         '<leader>lref',
-                         vim.lsp.buf.references,
-                         commonOpts)
-          vim.keymap.set({'n', 'v'},
-                         '<leader>lren',
-                         vim.lsp.buf.rename,
-                         commonOpts)
-
-          --vim.keymap.set({'n', 'v'},
-          --               '<leader>lcld',
-          --               vim.lsp.codelens.display,
-          --               { lenses: null })
-        end
-      })
-
-      -- Bash Language Server
-      vim.api.nvim_create_autocmd('FileType', {
-        pattern = 'sh',
-        callback = function()
-          vim.lsp.start({
-            name = 'bash-language-server',
-            cmd = { 'bash-language-server', 'start' },
-          })
-        end,
-      })
-
-      -- Go Language Server (gopls)
-      vim.api.nvim_create_autocmd('FileType', {
-        pattern = 'go',
-        callback = function()
-          vim.lsp.start({
-            name = 'gpls',
-            cmd = { 'gopls', '-remote=auto' },
-            root_dir = vim.fs.dirname(vim.fs.find({'go.mod', '.git'}, { upward = true })[1]),
-            on_attach = require("lsp-format").on_attach,
-            settings = {
-              -- TODO check if these are actually working...they don't seem to be on first blush
-              gopls = {
-                analyses = {
-                  unusedparams = true,
+            -- nvim-tree --
+            local gheight = vim.api.nvim_list_uis()[1].height
+            local gwidth = vim.api.nvim_list_uis()[1].width
+            local height = 30
+            local width = 30
+            require("nvim-tree").setup({
+              actions = {
+                open_file = {
+                  window_picker = {
+                    enable = false, -- false means open the file in the window that nvim-tree was opened from
+                  },
                 },
-                staticcheck = true,
               },
-            },
-          })
-        end,
-      })
+              view = {
+                adaptive_size = true,
+                float = {
+                  enable = true,
+                  quit_on_focus_loss = true,
+                  open_win_config = {
+                    relative = "editor",
+                    border = "rounded",
+                    width = width,
+                    height = height,
+                    row = gheight / 2 - height / 2,
+                    col = gwidth / 2 - width / 2,
+                  }
+                }
+              }
+            })
 
-      function org_imports()
-        local clients = vim.lsp.buf_get_clients()
-        for _, client in pairs(clients) do
-      
-          local params = vim.lsp.util.make_range_params(nil, client.offset_encoding)
-          params.context = {only = {"source.organizeImports"}}
-      
-          local result = vim.lsp.buf_request_sync(0, "textDocument/codeAction", params, 5000)
-          for _, res in pairs(result or {}) do
-            for _, r in pairs(res.result or {}) do
-              if r.edit then
-                vim.lsp.util.apply_workspace_edit(r.edit, client.offset_encoding)
-              else
-                vim.lsp.buf.execute_command(r.command)
+            local treeapi = require('nvim-tree.api')
+            vim.keymap.set("n", "<leader>tt", treeapi.tree.toggle)
+            -- toggle isn't the best but it gets the job done
+            vim.keymap.set("n", "<leader>tf", function() treeapi.tree.toggle({ find_file = true }) end)
+
+            -- See all commands: https://github.com/nvim-telescope/telescope.nvim#pickers
+            local telescope = require('telescope.builtin')
+            vim.keymap.set('n', '<leader>ff', telescope.find_files, {})
+            vim.keymap.set('n', '<leader>fg', telescope.grep_string, {})
+            vim.keymap.set('n', '<leader>fG', telescope.live_grep, {})
+            vim.keymap.set('n', '<leader>fj', telescope.jumplist, {})
+            vim.keymap.set('n', '<leader>fb', telescope.buffers, {})
+            vim.keymap.set('n', '<leader>fh', telescope.help_tags, {})
+            vim.keymap.set('n', '<leader>ftree', telescope.treesitter, {})
+            vim.keymap.set('n', '<leader>tdef', telescope.lsp_definitions, {})
+            vim.keymap.set('n', '<leader>tref', telescope.lsp_references, {})
+
+            vim.api.nvim_create_autocmd('LspAttach', {
+              callback = function(args)
+                local commonOpts = { buffer = args.buf, silent = true }
+
+                -- when the lsp needs to be reinitialized for various reasons
+                vim.keymap.set({'n'},
+                               '<leader>lstop',
+                               function() vim.lsp.stop_client(vim.lsp.get_active_clients()) end,
+                               commonOpts)
+
+                vim.keymap.set({'i'},
+                               '<c-space>',
+                               vim.lsp.buf.completion,
+                               commonOpts)
+
+                vim.keymap.set({'n', 'v'},
+                               '<leader>lca',
+                               vim.lsp.buf.code_action,
+                               commonOpts)
+                vim.keymap.set({'n', 'v'},
+                               '<leader>ldef',
+                               vim.lsp.buf.definition,
+                               commonOpts)
+                vim.keymap.set({'n', 'v'},
+                               '<leader>ldocs',
+                               vim.lsp.buf.document_symbol,
+                               commonOpts)
+                vim.keymap.set({'n', 'v'},
+                               '<leader>lf',
+                               vim.lsp.buf.format,
+                               commonOpts)
+                vim.keymap.set({'n', 'v'},
+                               '<leader>lh',
+                               vim.lsp.buf.hover,
+                               commonOpts)
+                vim.keymap.set({'n', 'v'},
+                               '<leader>li',
+                               vim.lsp.buf.implementation,
+                               commonOpts)
+                vim.keymap.set({'n', 'v'},
+                               '<leader>lref',
+                               vim.lsp.buf.references,
+                               commonOpts)
+                vim.keymap.set({'n', 'v'},
+                               '<leader>lren',
+                               vim.lsp.buf.rename,
+                               commonOpts)
+
+                --vim.keymap.set({'n', 'v'},
+                --               '<leader>lcld',
+                --               vim.lsp.codelens.display,
+                --               { lenses: null })
+              end
+            })
+
+            -- Bash Language Server
+            vim.api.nvim_create_autocmd('FileType', {
+              pattern = 'sh',
+              callback = function()
+                vim.lsp.start({
+                  name = 'bash-language-server',
+                  cmd = { 'bash-language-server', 'start' },
+                })
+              end,
+            })
+
+            -- Go Language Server (gopls)
+            vim.api.nvim_create_autocmd('FileType', {
+              pattern = 'go',
+              callback = function()
+                vim.lsp.start({
+                  name = 'gpls',
+                  cmd = { 'gopls', '-remote=auto' },
+                  root_dir = vim.fs.dirname(vim.fs.find({'go.mod', '.git'}, { upward = true })[1]),
+                  on_attach = require("lsp-format").on_attach,
+                  settings = {
+                    -- TODO check if these are actually working...they don't seem to be on first blush
+                    gopls = {
+                      analyses = {
+                        unusedparams = true,
+                      },
+                      staticcheck = true,
+                    },
+                  },
+                })
+              end,
+            })
+
+            -- Python Language Server
+            -- TODO NOT TESTED
+            -- TODO NOT TESTED
+            -- TODO NOT TESTED
+            -- TODO NOT TESTED
+            vim.api.nvim_create_autocmd('FileType', {
+              pattern = 'python',
+              callback = function()
+                vim.lsp.start({
+                  name = 'python-language-server',
+                  cmd = { 'python-language-server' },
+                })
+              end,
+            })
+
+            -- Terraform Language Server
+            -- TODO NOT TESTED
+            -- TODO NOT TESTED
+            -- TODO NOT TESTED
+            -- TODO NOT TESTED
+            vim.api.nvim_create_autocmd('FileType', {
+              pattern = 'terraform',
+              callback = function()
+                vim.lsp.start({
+                  name = 'terraformls',
+                  cmd = { 'terraform-ls', 'serve' },
+                  root_dir = vim.fs.dirname(vim.fs.find({'.terraform', '.git'}, { upward = true })[1]),
+                })
+              end,
+            })
+            vim.api.nvim_create_autocmd({"BufWritePre"}, {
+              pattern = {"*.tf", "*.tfvars"},
+              callback = vim.lsp.buf.format,
+            })
+
+            -- Typescript Language Server
+            -- A nice example for overcoming some errors like typescript not being found:
+            -- - https://github.com/ghostbuster91/dot-files/blob/nix/programs/neovim/default.nix#L30
+            local tsserver_path = "${pkgs.nodePackages.typescript-language-server}/bin/typescript-language-server"
+            local typescript_path = "${pkgs.nodePackages.typescript}/lib/node_modules/typescript/lib"
+            vim.api.nvim_create_autocmd('FileType', {
+              pattern = { 'javascript', 'typescript' },
+              callback = function()
+                vim.lsp.start({
+                  name = 'typescript-language-server',
+                  cmd = { tsserver_path, '--stdio', '--tsserver-path', typescript_path },
+                  root_dir = vim.fs.dirname(vim.fs.find({'package.json', '.git'}, { upward = true })[1]),
+                  on_attach = require("lsp-format").on_attach,
+                })
+              end,
+            })
+
+            -- Source:
+            -- https://github.com/neovim/nvim-lspconfig/issues/115#issuecomment-1128949874
+            function org_imports()
+              local clients = vim.lsp.buf_get_clients()
+              for _, client in pairs(clients) do
+            
+                local params = vim.lsp.util.make_range_params(nil, client.offset_encoding)
+                params.context = {only = {"source.organizeImports"}}
+            
+                local result = vim.lsp.buf_request_sync(0, "textDocument/codeAction", params, 5000)
+                for _, res in pairs(result or {}) do
+                  for _, r in pairs(res.result or {}) do
+                    if r.edit then
+                      vim.lsp.util.apply_workspace_edit(r.edit, client.offset_encoding)
+                    else
+                      vim.lsp.buf.execute_command(r.command)
+                    end
+                  end
+                end
               end
             end
-          end
-        end
-      end
-      
-      vim.api.nvim_create_autocmd("BufWritePre", {
-        pattern = { "*.go" },
-        callback = vim.lsp.buf.format,
-      })
-      
-      vim.api.nvim_create_autocmd("BufWritePre", {
-        pattern = { "*.go" },
-        callback = org_imports,
-      })
+
+            -- YAML Language Server
+            vim.api.nvim_create_autocmd('FileType', {
+              pattern = 'yaml',
+              callback = function()
+                vim.lsp.start({
+                  name = 'yaml',
+                  cmd = { 'yaml-language-server', '--stdio' },
+                })
+              end,
+            })
+     
+            vim.api.nvim_create_autocmd("BufWritePre", {
+              pattern = { "*.go" },
+              callback = vim.lsp.buf.format,
+            })
+            
+            vim.api.nvim_create_autocmd("BufWritePre", {
+              pattern = { "*.go" },
+              callback = org_imports,
+            })
 
 		'';
 	in {
@@ -210,22 +323,45 @@
     vimAlias = true;
     vimdiffAlias = true;
 		extraConfig = "lua << EOF\n" + initlua + "\nEOF";
-		plugins = with pkgs.vimPlugins;
-		let
-			context-vim = pkgs.vimUtils.buildVimPlugin {
-				name = "context-vim";
-				src = pkgs.fetchFromGitHub {
-					owner = "wellle";
-					repo = "context.vim";
-					rev = "e38496f1eb5bb52b1022e5c1f694e9be61c3714c";
-					sha256 = "1iy614py9qz4rwk9p4pr1ci0m1lvxil0xiv3ymqzhqrw5l55n346";
-				};
-			};
-		in [
-			# left as example
-			#context-vim
+    extraPackages = [
+      pkgs.nodePackages.eslint
+      pkgs.nodePackages.prettier
+      pkgs.nodePackages.typescript
+    ];
+    plugins = with pkgs.vimPlugins;
+    let
+      context-vim = pkgs.vimUtils.buildVimPlugin {
+        name = "context-vim";
+        src = pkgs.fetchFromGitHub {
+          owner = "wellle";
+          repo = "context.vim";
+          rev = "e38496f1eb5bb52b1022e5c1f694e9be61c3714c";
+          sha256 = "1iy614py9qz4rwk9p4pr1ci0m1lvxil0xiv3ymqzhqrw5l55n346";
+        };
+      };
+    in [
+      # left as example
+      #context-vim
 
-			bufexplorer
+      bufexplorer
+
+      { plugin = gitsigns-nvim;
+        config = ''
+          lua << EOF
+          -- https://github.com/lewis6991/gitsigns.nvim#usage
+          require('gitsigns').setup {
+            current_line_blame = true,
+            current_line_blame_opts = {
+              virt_text = true,
+              virt_text_pos = 'right_align', -- 'eol' | 'overlay' | 'right_align'
+              delay = 200,
+              ignore_whitespace = false,
+            },
+            current_line_blame_formatter = '<author>, <author_time:%Y-%m-%d> (<abbrev_sha>) - <summary>',
+          }
+          EOF
+        '';
+      }
 
       { plugin = lsp-format-nvim;
         config = ''
@@ -235,7 +371,8 @@
         '';
       }
 
-      nerdtree
+      # Attempting to use nvim-tree-lua
+      # nerdtree
 
       # Using neovim 8's builtin
 			# nvim-lspconfig
@@ -259,17 +396,28 @@
         '';
       }
 
-			nvim-treesitter
+      nvim-tree-lua
+
+      nvim-treesitter
       (pkgs.vimPlugins.nvim-treesitter.withPlugins (plugins: with plugins; [
         bash
         c
+        dockerfile
         go
+        html
         javascript
+        json
+        lua
+        markdown
         python
+        sql
+        typescript
       ]))
 
+      papercolor-theme
+
       ########################## telescope
-      plenary-nvim
+      plenary-nvim # requirement
       telescope-fzf-native-nvim
       {
         plugin = telescope-nvim;
@@ -280,9 +428,9 @@
         '';
       }
 
-			vim-nix
-			vim-sleuth
-		]; # Only loaded if programs.neovim.extraConfig is set
+      vim-nix
+      vim-sleuth
+    ]; # Only loaded if programs.neovim.extraConfig is set
   };
 
   programs.powerline-go = {
