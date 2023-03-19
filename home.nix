@@ -27,12 +27,15 @@
     git-crypt
     gnumake
     go
+    golangci-lint-langserver
     google-cloud-sdk
     gopls
     gnupg
     jq
     k9s
     kubectl
+    libuuid
+    meld
     mpv
     nerdfonts # required for nvim-web-devicons (use hack nerd font)
     # neovim # uncomment if not using nixos. there's probably a way to do this in nix...but effort :)
@@ -40,6 +43,7 @@
     nodePackages.bash-language-server
     nodePackages.eslint
     nodePackages.prettier
+    nodePackages.pyright
     nodePackages.typescript
     nodePackages.typescript-language-server
     nodePackages.yaml-language-server
@@ -48,7 +52,6 @@
     peek
     powerline-go
     pwgen # devops-utils.git
-    python-language-server
     ripgrep
     rustdesk
     shellcheck # bash script linter
@@ -71,6 +74,8 @@
       export EDITOR="nvim";
       source ~/.config/bash/thales.bashrc
       set -o vi
+
+      export PATH=$PATH:$GOPATH/bin
     '';
     shellAliases = {
       cdk = "cd ~/dev/gitlab.protectv.local/ncryptify";
@@ -284,11 +289,31 @@
                     -- TODO check if these are actually working...they don't seem to be on first blush
                     gopls = {
                       analyses = {
+                        nilness = true,
+                        shadow = true,
+                        useany = true,
                         unusedparams = true,
+                        unusedvariable = true,
+                        unusedwrite = true,
                       },
                       staticcheck = true,
                     },
                   },
+                  capabilities = require('cmp_nvim_lsp').default_capabilities()
+                })
+              end,
+            })
+            vim.api.nvim_create_autocmd('FileType', {
+              pattern = 'go',
+              callback = function()
+                vim.lsp.start({
+                  name = 'golangci-lint-langserver',
+                  cmd = {'golangci-lint-langserver', '-debug'},
+                  root_dir = vim.fs.dirname(vim.fs.find({'go.mod', '.git'}, { upward = true })[1]),
+                  init_options = {
+                    command = { "/home/cat/go/bin/golangci-lint", "run", "--out-format", "json", "--issues-exit-code=1" },
+                  },
+                  settings = {},
                   capabilities = require('cmp_nvim_lsp').default_capabilities()
                 })
               end,
@@ -327,17 +352,23 @@
             })
 
             -- Python Language Server
-            -- TODO NOT TESTED
-            -- TODO NOT TESTED
-            -- TODO NOT TESTED
-            -- TODO NOT TESTED
             vim.api.nvim_create_autocmd('FileType', {
               pattern = 'python',
               callback = function()
                 vim.lsp.start({
-                  name = 'python-language-server',
-                  cmd = { 'python-language-server' },
+                  name = 'pyright',
+                  cmd = { "${pkgs.nodePackages.pyright}/bin/pyright-langserver", '--stdio' },
+                  root_dir = vim.fs.dirname(vim.fs.find({'requirements.txt', '.git'}, { upward = true })[1]),
                   on_attach = require("lsp-format").on_attach,
+                  settings = {
+                    python = {
+                      analysis = {
+                        autoSearchPaths = true,
+                        useLibraryCodeForTypes = true,
+                        diagnosticMode = "workspace",
+                      },
+                    },
+                  },
                 })
               end,
             })
@@ -682,12 +713,6 @@
         '';
       }
 
-      {
-        plugin = tbo-notion;
-        config = ''
-        '';
-      }
-
       vim-nix
       # Sleuth never worked for me with Go code. It always said this...
       #   noet sw=2 ff=unix fenc=utf-8 nobomb
@@ -755,6 +780,7 @@
 
         "${modifier}+Shift+s" = "sticky toggle";
         "${modifier}+Shift+e" = "exec --no-startup-id /run/current-system/sw/bin/qdbus org.kde.ksmserver /KSMServer org.kde.KSMServerInterface.logout -1 -1 -1";
+        # Disabled to see if this fixes some instability in KDE plasmashell where it would lockup and could not be killed/restarted
         "${modifier}+d" = "exec --no-startup-id /run/current-system/sw/bin/qdbus org.kde.krunner /App display";
       };
 
