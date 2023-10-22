@@ -4,6 +4,11 @@
 
 { config, pkgs, ... }:
 
+let
+  pkgsUnstable = import <nixpkgs-unstable> {
+    config.allowUnfree = true;
+  };
+in
 {
   nixpkgs.config.allowUnfree = true;
   nix.settings.experimental-features = [ "nix-command" "flakes" ];
@@ -99,7 +104,11 @@
   # };
 
   # Enable CUPS to print documents.
-  # services.printing.enable = true;
+  services.printing.enable = true;
+  services.avahi.enable = true;
+  services.avahi.nssmdns = true;
+  # for a WiFi printer
+  services.avahi.openFirewall = true;
 
   # Enable sound.
   sound.enable = true;
@@ -138,8 +147,8 @@
     clang
     curl
     dig
-    docker
-    docker-compose
+    pkgsUnstable.docker
+    pkgsUnstable.docker-compose
     firefox
     gcc
     i3
@@ -154,6 +163,8 @@
     xclip			# for neovim copying/pasting to system clipboard
     yakuake
   ];
+
+  programs.kdeconnect.enable = true;
 
   # Some programs need SUID wrappers, can be configured further or are
   # started in user sessions.
@@ -471,7 +482,7 @@
     '';
 
   home-manager.users.cat = { pkgs, ... }: {
-    home.stateVersion = "22.11"; # REQUIRED!
+    home.stateVersion = "23.05"; # REQUIRED!
     home.packages = with pkgs; [
       git
       # ...
