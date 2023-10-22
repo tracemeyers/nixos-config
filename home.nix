@@ -1,5 +1,10 @@
 { config, lib, pkgs, ... }:
 
+let
+  pkgsUnstable = import <nixpkgs-unstable> {
+    config.allowUnfree = true;
+  };
+in
 {
   nixpkgs.config.allowUnfree = true;
 
@@ -16,7 +21,7 @@
   # You can update Home Manager without changing this value. See
   # the Home Manager release notes for a list of state version
   # changes in each release.
-  home.stateVersion = "22.11";
+  home.stateVersion = "23.05";
 
   home.packages = with pkgs; [
     chromium
@@ -28,41 +33,48 @@
     gnumake
     go
     golangci-lint-langserver
-    google-cloud-sdk
+    (google-cloud-sdk.withExtraComponents [google-cloud-sdk.components.gke-gcloud-auth-plugin])
     gopls
     gnupg
+    gping
     jq
     k9s
+    # temp
+    kotlin-language-server
     kubectl
+    lazygit
     libuuid
     meld
     mpv
     nerdfonts # required for nvim-web-devicons (use hack nerd font)
     # neovim # uncomment if not using nixos. there's probably a way to do this in nix...but effort :)
-    nodejs-16_x
-    nodePackages.bash-language-server
-    nodePackages.eslint
-    nodePackages.prettier
-    nodePackages.pyright
-    nodePackages.typescript
-    nodePackages.typescript-language-server
-    nodePackages.yaml-language-server
+    nodejs-18_x
+    pkgsUnstable.nodePackages.bash-language-server
+    pkgsUnstable.nodePackages.eslint
+    pkgsUnstable.nodePackages.prettier
+    pkgsUnstable.nodePackages.pyright
+    pkgsUnstable.nodePackages.typescript
+    pkgsUnstable.nodePackages.typescript-language-server
+    pkgsUnstable.nodePackages.yaml-language-server
     obs-studio
     openssl
     peek
     powerline-go
+    pstree
     pwgen # devops-utils.git
     ripgrep
     rustdesk
     shellcheck # bash script linter
     shfmt      # bash script formatter
     slack
+    steam-run
     terraform
     terraform-ls
     tree
     unzip
     vault
     yq
+    pkgsUnstable.obsidian
   ];
 
   # Let Home Manager install and manage itself.
@@ -88,8 +100,6 @@
 
   programs.firefox = {
     enable = true;
-    extensions = [
-    ];
   };
 
   programs.git = {
@@ -296,6 +306,9 @@
                         unusedvariable = true,
                         unusedwrite = true,
                       },
+                      env = {
+                        GOFLAGS = "-tags linux,gormv2"
+                      },
                       staticcheck = true,
                     },
                   },
@@ -404,11 +417,16 @@
               callback = function()
                 vim.lsp.start({
                   name = 'typescript-language-server',
-                  cmd = { tsserver_path, '--stdio', '--tsserver-path', typescript_path },
+                  cmd = { tsserver_path, '--stdio' },
                   root_dir = vim.fs.dirname(vim.fs.find({'package.json', '.git'}, { upward = true })[1]),
                   --lsp-format doesn't use prettier. not sure how to get it to work
                   --on_attach = require("lsp-format").on_attach,
-                  capabilities = require('cmp_nvim_lsp').default_capabilities()
+                  capabilities = require('cmp_nvim_lsp').default_capabilities(),
+                  init_options = {
+                    tsserver = {
+                      path = typescript_path
+                    }
+                  }
                 })
               end,
             })
@@ -482,6 +500,16 @@
           EOF
         '';
       }
+
+      # Not available. How to manually do this?
+      #{
+      #  plugin = kotlin-language-server;
+      #  config = ''
+      #    lua << EOF
+      #      require("kotlin-language-server").setup {}
+      #    EOF
+      #  '';
+      #}
 
       { plugin = lsp-format-nvim;
         config = ''
@@ -660,12 +688,34 @@
         html
         javascript
         json
+        kotlin
         lua
         markdown
         python
         sql
         typescript
+        yaml
       ]))
+      {
+        plugin = nvim-treesitter;
+        config = ''
+          lua << EOF
+            require'nvim-treesitter.configs'.setup {
+              highlight = {
+                enable = true,
+                -- Setting this to true will run `:h syntax` and tree-sitter at the same time.
+                -- Set this to `true` if you depend on 'syntax' being enabled (like for indentation).
+                -- Using this option may slow down your editor, and you may see some duplicate highlights.
+                -- Instead of true it can also be a list of languages
+                additional_vim_regex_highlighting = false,
+              },
+              indent = {
+                enable = true
+              },
+            }
+          EOF
+        '';
+      }
 
       papercolor-theme
 
@@ -774,7 +824,8 @@
         "${modifier}+Shift+j" = "move down";
         "${modifier}+Shift+k" = "move up";
         "${modifier}+Shift+l" = "move right";
-        "${modifier}+Shift+greater" = "move right";
+        "${modifier}+Shift+greater" = "move workspace to output next";
+        #"${modifier}+Ctrl+greater = "move workspace to output next";
         #bindsym $mod+Shift+greater move container to output right
         #bindsym $mod+Shift+less move container to output left
 
@@ -823,7 +874,11 @@
 
 
       # Documented in KDE knowledge base
-      for_window [title="Desktop — Plasma"] kill, floating enable, border none
+      # TRACE - don't kill the desktop so we can add panel's as needed
+      # The big drawback is the desktop initially takes over the whole
+      # screen so you have to alt+right-mouse-click to shrink it.
+      #for_window [title="Desktop — Plasma"] kill, floating enable, border none
+      for_window [title="Desktop — Plasma"] floating enable, border none
       for_window [class="plasmashell"] floating enable
       for_window [class="Plasma"] floating enable, border none
       for_window [title="plasma-desktop"] floating enable, border none
@@ -858,4 +913,6 @@
     enableBashIntegration = true;
     nix-direnv.enable = true;
   };
+
+  services.kdeconnect.enable = true;
 }
